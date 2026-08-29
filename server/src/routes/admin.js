@@ -263,7 +263,7 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "unseen-class/pdfs",
-    resource_type: "raw",
+    resource_type: "image",
     format: "pdf"
   }
 });
