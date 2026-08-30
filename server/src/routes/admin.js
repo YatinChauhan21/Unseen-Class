@@ -51,16 +51,11 @@ const uploadToCloudinary = (file) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: "unseen-class/pdfs",
-        resource_type: "image",
-        format: "pdf"
+        resource_type: "image"
       },
       (error, result) => {
         if (error) {
-          console.error(
-            "Cloudinary upload error:",
-            error
-          );
-
+          console.error("Cloudinary upload error:", error);
           reject(error);
         } else {
           resolve(result);
