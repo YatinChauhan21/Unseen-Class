@@ -13,17 +13,17 @@ const router = Router();
 router.use(requireAdmin);
 
 // ─────────────────────────────────────────────
-// CLOUDINARY CONFIG
+// CLOUDINARY
+// Uses the existing CLOUDINARY_URL environment variable
+// Example:
+// CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 // ─────────────────────────────────────────────
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// No cloudinary.config() is needed.
+// Cloudinary automatically reads CLOUDINARY_URL.
 
 // ─────────────────────────────────────────────
-// MULTER - STORE FILE IN MEMORY
+// MULTER - KEEP FILE IN MEMORY
 // ─────────────────────────────────────────────
 
 const upload = multer({
@@ -56,6 +56,11 @@ const uploadToCloudinary = (file) => {
       },
       (error, result) => {
         if (error) {
+          console.error(
+            "Cloudinary upload error:",
+            error
+          );
+
           reject(error);
         } else {
           resolve(result);
@@ -72,26 +77,36 @@ const uploadToCloudinary = (file) => {
 // ─────────────────────────────────────────────
 
 router.get("/stats", async (_req, res) => {
-  const [subjects, chapters, resources, downloads] =
-    await Promise.all([
-      Subject.countDocuments(),
-      Chapter.countDocuments(),
-      Resource.countDocuments(),
-      Resource.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$downloads" }
+  const [
+    subjects,
+    chapters,
+    resources,
+    downloads
+  ] = await Promise.all([
+    Subject.countDocuments(),
+
+    Chapter.countDocuments(),
+
+    Resource.countDocuments(),
+
+    Resource.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: "$downloads"
           }
         }
-      ])
-    ]);
+      }
+    ])
+  ]);
 
   res.json({
     subjects,
     chapters,
     resources,
-    downloads: downloads[0]?.total || 0
+    downloads:
+      downloads[0]?.total || 0
   });
 });
 
@@ -118,17 +133,19 @@ router.post("/subjects", async (req, res) => {
 
   if (!name) {
     return res.status(400).json({
-      message: "Subject name is required"
+      message:
+        "Subject name is required"
     });
   }
 
-  const subject = await Subject.create({
-    name,
-    slug: slugify(name),
-    description,
-    icon: icon || "📚",
-    order: Number(order) || 0
-  });
+  const subject =
+    await Subject.create({
+      name,
+      slug: slugify(name),
+      description,
+      icon: icon || "📚",
+      order: Number(order) || 0
+    });
 
   res.status(201).json(subject);
 });
@@ -149,7 +166,8 @@ router.put("/subjects/:id", async (req, res) => {
         slug: slugify(name),
         description,
         icon,
-        order: Number(order) || 0
+        order:
+          Number(order) || 0
       },
       {
         new: true,
@@ -160,40 +178,46 @@ router.put("/subjects/:id", async (req, res) => {
   res.json(subject);
 });
 
-router.delete("/subjects/:id", async (req, res) => {
-  const chapters = await Chapter.find({
-    subject: req.params.id
-  });
-
-  const chapterIds =
-    chapters.map(c => c._id);
-
-  await Resource.deleteMany({
-    $or: [
-      {
+router.delete(
+  "/subjects/:id",
+  async (req, res) => {
+    const chapters =
+      await Chapter.find({
         subject: req.params.id
-      },
-      {
-        chapter: {
-          $in: chapterIds
+      });
+
+    const chapterIds =
+      chapters.map(
+        c => c._id
+      );
+
+    await Resource.deleteMany({
+      $or: [
+        {
+          subject: req.params.id
+        },
+        {
+          chapter: {
+            $in: chapterIds
+          }
         }
-      }
-    ]
-  });
+      ]
+    });
 
-  await Chapter.deleteMany({
-    subject: req.params.id
-  });
+    await Chapter.deleteMany({
+      subject: req.params.id
+    });
 
-  await Subject.findByIdAndDelete(
-    req.params.id
-  );
+    await Subject.findByIdAndDelete(
+      req.params.id
+    );
 
-  res.json({
-    message:
-      "Subject and its chapters/resources deleted"
-  });
-});
+    res.json({
+      message:
+        "Subject and its chapters/resources deleted"
+    });
+  }
+);
 
 // ─────────────────────────────────────────────
 // CHAPTERS
@@ -202,7 +226,10 @@ router.delete("/subjects/:id", async (req, res) => {
 router.get("/chapters", async (_req, res) => {
   const chapters =
     await Chapter.find()
-      .populate("subject", "name")
+      .populate(
+        "subject",
+        "name"
+      )
       .sort({
         order: 1,
         name: 1
@@ -232,53 +259,63 @@ router.post("/chapters", async (req, res) => {
       name,
       slug: slugify(name),
       description,
-      order: Number(order) || 0
+      order:
+        Number(order) || 0
     });
 
-  res.status(201).json(chapter);
+  res.status(201).json(
+    chapter
+  );
 });
 
-router.put("/chapters/:id", async (req, res) => {
-  const {
-    subject,
-    name,
-    description,
-    order
-  } = req.body;
+router.put(
+  "/chapters/:id",
+  async (req, res) => {
+    const {
+      subject,
+      name,
+      description,
+      order
+    } = req.body;
 
-  const chapter =
-    await Chapter.findByIdAndUpdate(
-      req.params.id,
-      {
-        subject,
-        name,
-        slug: slugify(name),
-        description,
-        order: Number(order) || 0
-      },
-      {
-        new: true,
-        runValidators: true
-      }
+    const chapter =
+      await Chapter.findByIdAndUpdate(
+        req.params.id,
+        {
+          subject,
+          name,
+          slug: slugify(name),
+          description,
+          order:
+            Number(order) || 0
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+    res.json(chapter);
+  }
+);
+
+router.delete(
+  "/chapters/:id",
+  async (req, res) => {
+    await Resource.deleteMany({
+      chapter: req.params.id
+    });
+
+    await Chapter.findByIdAndDelete(
+      req.params.id
     );
 
-  res.json(chapter);
-});
-
-router.delete("/chapters/:id", async (req, res) => {
-  await Resource.deleteMany({
-    chapter: req.params.id
-  });
-
-  await Chapter.findByIdAndDelete(
-    req.params.id
-  );
-
-  res.json({
-    message:
-      "Chapter and resources deleted"
-  });
-});
+    res.json({
+      message:
+        "Chapter and resources deleted"
+    });
+  }
+);
 
 // ─────────────────────────────────────────────
 // RESOURCES
@@ -287,8 +324,14 @@ router.delete("/chapters/:id", async (req, res) => {
 router.get("/resources", async (_req, res) => {
   const resources =
     await Resource.find()
-      .populate("subject", "name")
-      .populate("chapter", "name")
+      .populate(
+        "subject",
+        "name"
+      )
+      .populate(
+        "chapter",
+        "name"
+      )
       .sort({
         createdAt: -1
       });
@@ -296,7 +339,10 @@ router.get("/resources", async (_req, res) => {
   res.json(resources);
 });
 
-// Chapter-wise resource upload
+// ─────────────────────────────────────────────
+// CHAPTER-WISE RESOURCE UPLOAD
+// ─────────────────────────────────────────────
+
 router.post(
   "/resources",
   upload.single("file"),
@@ -312,7 +358,11 @@ router.post(
         published
       } = req.body;
 
-      if (!subject || !chapter || !title) {
+      if (
+        !subject ||
+        !chapter ||
+        !title
+      ) {
         return res.status(400).json({
           message:
             "Subject, chapter and title are required"
@@ -336,7 +386,8 @@ router.post(
           subject,
           chapter,
           title,
-          type: type || "Notes",
+          type:
+            type || "Notes",
           description:
             description || "",
           youtubeUrl:
@@ -347,7 +398,8 @@ router.post(
           fileUrl,
 
           originalName:
-            req.file?.originalname || ""
+            req.file?.originalname ||
+            ""
         });
 
       res.status(201).json(
@@ -369,7 +421,7 @@ router.post(
 );
 
 // ─────────────────────────────────────────────
-// SUBJECT-WISE PYQs
+// SUBJECT-WISE PYQ UPLOAD
 // ─────────────────────────────────────────────
 
 router.post(
@@ -414,6 +466,7 @@ router.post(
           scope: "subject",
 
           title,
+
           type: "PYQ",
 
           description:
@@ -422,7 +475,8 @@ router.post(
           published:
             published !== "false",
 
-          // Cloudinary URL
+          // IMPORTANT:
+          // Save Cloudinary URL
           fileUrl:
             uploaded.secure_url,
 
@@ -514,7 +568,7 @@ router.delete(
     }
 
     // Delete from Cloudinary
-    // only for Cloudinary URLs.
+    // only if it is a Cloudinary URL.
     if (
       resource.fileUrl &&
       resource.fileUrl.includes(
@@ -526,7 +580,9 @@ router.delete(
           resource.fileUrl;
 
         const uploadIndex =
-          url.indexOf("/upload/");
+          url.indexOf(
+            "/upload/"
+          );
 
         if (uploadIndex !== -1) {
           let publicId =
@@ -542,7 +598,7 @@ router.delete(
               ""
             );
 
-          // Remove extension
+          // Remove .pdf
           publicId =
             publicId.replace(
               /\.pdf$/,
@@ -565,6 +621,9 @@ router.delete(
       }
     }
 
+    // Old /uploads files are simply
+    // removed from the database.
+    // They are no longer stored locally.
     await resource.deleteOne();
 
     res.json({
