@@ -1,7 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
 
 import Subject from "../models/Subject.js";
 import Chapter from "../models/Chapter.js";
@@ -14,7 +13,7 @@ const router = Router();
 router.use(requireAdmin);
 
 // ─────────────────────────────────────────────
-// CLOUDINARY CONFIGURATION
+// CLOUDINARY CONFIG
 // ─────────────────────────────────────────────
 
 cloudinary.config({
@@ -24,23 +23,16 @@ cloudinary.config({
 });
 
 // ─────────────────────────────────────────────
-// CLOUDINARY PDF STORAGE
+// MULTER - STORE FILE IN MEMORY
 // ─────────────────────────────────────────────
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "unseen-class/pdfs",
-    resource_type: "image",
-    format: "pdf"
-  }
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
+
   limits: {
     fileSize: 25 * 1024 * 1024
   },
+
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === "application/pdf") {
       cb(null, true);
@@ -51,23 +43,49 @@ const upload = multer({
 });
 
 // ─────────────────────────────────────────────
+// UPLOAD PDF TO CLOUDINARY
+// ─────────────────────────────────────────────
+
+const uploadToCloudinary = (file) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "unseen-class/pdfs",
+        resource_type: "image",
+        format: "pdf"
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+
+    stream.end(file.buffer);
+  });
+};
+
+// ─────────────────────────────────────────────
 // STATS
 // ─────────────────────────────────────────────
 
 router.get("/stats", async (_req, res) => {
-  const [subjects, chapters, resources, downloads] = await Promise.all([
-    Subject.countDocuments(),
-    Chapter.countDocuments(),
-    Resource.countDocuments(),
-    Resource.aggregate([
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$downloads" }
+  const [subjects, chapters, resources, downloads] =
+    await Promise.all([
+      Subject.countDocuments(),
+      Chapter.countDocuments(),
+      Resource.countDocuments(),
+      Resource.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$downloads" }
+          }
         }
-      }
-    ])
-  ]);
+      ])
+    ]);
 
   res.json({
     subjects,
@@ -123,20 +141,21 @@ router.put("/subjects/:id", async (req, res) => {
     order
   } = req.body;
 
-  const subject = await Subject.findByIdAndUpdate(
-    req.params.id,
-    {
-      name,
-      slug: slugify(name),
-      description,
-      icon,
-      order: Number(order) || 0
-    },
-    {
-      new: true,
-      runValidators: true
-    }
-  );
+  const subject =
+    await Subject.findByIdAndUpdate(
+      req.params.id,
+      {
+        name,
+        slug: slugify(name),
+        description,
+        icon,
+        order: Number(order) || 0
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
   res.json(subject);
 });
@@ -146,9 +165,8 @@ router.delete("/subjects/:id", async (req, res) => {
     subject: req.params.id
   });
 
-  const chapterIds = chapters.map(
-    c => c._id
-  );
+  const chapterIds =
+    chapters.map(c => c._id);
 
   await Resource.deleteMany({
     $or: [
@@ -182,12 +200,13 @@ router.delete("/subjects/:id", async (req, res) => {
 // ─────────────────────────────────────────────
 
 router.get("/chapters", async (_req, res) => {
-  const chapters = await Chapter.find()
-    .populate("subject", "name")
-    .sort({
-      order: 1,
-      name: 1
-    });
+  const chapters =
+    await Chapter.find()
+      .populate("subject", "name")
+      .sort({
+        order: 1,
+        name: 1
+      });
 
   res.json(chapters);
 });
@@ -207,13 +226,14 @@ router.post("/chapters", async (req, res) => {
     });
   }
 
-  const chapter = await Chapter.create({
-    subject,
-    name,
-    slug: slugify(name),
-    description,
-    order: Number(order) || 0
-  });
+  const chapter =
+    await Chapter.create({
+      subject,
+      name,
+      slug: slugify(name),
+      description,
+      order: Number(order) || 0
+    });
 
   res.status(201).json(chapter);
 });
@@ -281,117 +301,160 @@ router.post(
   "/resources",
   upload.single("file"),
   async (req, res) => {
-    const {
-      subject,
-      chapter,
-      title,
-      type,
-      description,
-      youtubeUrl,
-      published
-    } = req.body;
-
-    if (!subject || !chapter || !title) {
-      return res.status(400).json({
-        message:
-          "Subject, chapter and title are required"
-      });
-    }
-
-    const resource =
-      await Resource.create({
+    try {
+      const {
         subject,
         chapter,
         title,
-        type: type || "Notes",
-        description:
-          description || "",
-        youtubeUrl:
-          youtubeUrl || "",
-        published:
-          published !== "false",
+        type,
+        description,
+        youtubeUrl,
+        published
+      } = req.body;
 
-        // Cloudinary URL
-        fileUrl:
-          req.file
-            ? req.file.path
-            : "",
+      if (!subject || !chapter || !title) {
+        return res.status(400).json({
+          message:
+            "Subject, chapter and title are required"
+        });
+      }
 
-        originalName:
-          req.file?.originalname || ""
+      let fileUrl = "";
+
+      if (req.file) {
+        const uploaded =
+          await uploadToCloudinary(
+            req.file
+          );
+
+        fileUrl =
+          uploaded.secure_url;
+      }
+
+      const resource =
+        await Resource.create({
+          subject,
+          chapter,
+          title,
+          type: type || "Notes",
+          description:
+            description || "",
+          youtubeUrl:
+            youtubeUrl || "",
+          published:
+            published !== "false",
+
+          fileUrl,
+
+          originalName:
+            req.file?.originalname || ""
+        });
+
+      res.status(201).json(
+        resource
+      );
+    } catch (error) {
+      console.error(
+        "Resource upload failed:",
+        error
+      );
+
+      res.status(500).json({
+        message:
+          error.message ||
+          "Failed to upload resource"
       });
-
-    res.status(201).json(resource);
+    }
   }
 );
 
 // ─────────────────────────────────────────────
-// SUBJECT-WISE PYQ
+// SUBJECT-WISE PYQs
 // ─────────────────────────────────────────────
 
 router.post(
   "/pyqs",
   upload.single("file"),
   async (req, res) => {
-    const {
-      subject,
-      title,
-      description,
-      published
-    } = req.body;
-
-    if (!subject || !title) {
-      return res.status(400).json({
-        message:
-          "Subject and title are required"
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        message:
-          "PDF file is required"
-      });
-    }
-
-    const pyq =
-      await Resource.create({
+    try {
+      const {
         subject,
-
-        // No chapter for subject-wise PYQ
-        chapter: undefined,
-
-        // Subject-wise resource
-        scope: "subject",
-
         title,
-        type: "PYQ",
-        description:
-          description || "",
-        published:
-          published !== "false",
+        description,
+        published
+      } = req.body;
 
-        // Cloudinary URL
-        fileUrl:
-          req.file.path,
+      if (!subject || !title) {
+        return res.status(400).json({
+          message:
+            "Subject and title are required"
+        });
+      }
 
-        originalName:
-          req.file.originalname
-      });
+      if (!req.file) {
+        return res.status(400).json({
+          message:
+            "PDF file is required"
+        });
+      }
 
-    const populated =
-      await Resource.findById(
-        pyq._id
-      )
-        .populate(
-          "subject",
-          "name"
+      // Upload PDF to Cloudinary
+      const uploaded =
+        await uploadToCloudinary(
+          req.file
+        );
+
+      const pyq =
+        await Resource.create({
+          subject,
+
+          // No chapter for subject-wise PYQ
+          chapter: undefined,
+
+          scope: "subject",
+
+          title,
+          type: "PYQ",
+
+          description:
+            description || "",
+
+          published:
+            published !== "false",
+
+          // Cloudinary URL
+          fileUrl:
+            uploaded.secure_url,
+
+          originalName:
+            req.file.originalname
+        });
+
+      const populated =
+        await Resource.findById(
+          pyq._id
         )
-        .lean();
+          .populate(
+            "subject",
+            "name"
+          )
+          .lean();
 
-    res.status(201).json(
-      populated
-    );
+      res.status(201).json(
+        populated
+      );
+    } catch (error) {
+      console.error(
+        "PYQ upload failed:",
+        error
+      );
+
+      res.status(500).json({
+        message:
+          error.message ||
+          "Failed to upload PYQ"
+      });
+    }
   }
 );
 
@@ -450,7 +513,8 @@ router.delete(
       });
     }
 
-    // Delete Cloudinary file if available
+    // Delete from Cloudinary
+    // only for Cloudinary URLs.
     if (
       resource.fileUrl &&
       resource.fileUrl.includes(
@@ -471,14 +535,14 @@ router.delete(
                 "/upload/".length
             );
 
-          // Remove version if present
+          // Remove version
           publicId =
             publicId.replace(
               /^v\d+\//,
               ""
             );
 
-          // Remove .pdf extension
+          // Remove extension
           publicId =
             publicId.replace(
               /\.pdf$/,
