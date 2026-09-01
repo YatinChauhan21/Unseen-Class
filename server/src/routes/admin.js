@@ -51,7 +51,7 @@ const uploadToCloudinary = (file) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: "unseen-class/pdfs",
-        resource_type: "image"
+        resource_type: "raw"
       },
       (error, result) => {
         if (error) {
@@ -604,7 +604,7 @@ router.delete(
             publicId,
             {
               resource_type:
-                "image"
+                "raw"
             }
           );
         }
