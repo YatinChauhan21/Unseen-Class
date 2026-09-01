@@ -181,7 +181,7 @@ function ChapterPage() {
 
   const download = async (resource) => {
     const r = await api.post(`/public/resources/${resource._id}/download`);
-    window.open(`${SERVER_URL}${r.data.fileUrl}`, "_blank");
+    window.open(r.data.fileUrl, "_blank");
   };
 
   if (!data) return <Loader />;
