@@ -116,24 +116,72 @@ function Home() {
   );
 }
 
+// function Subjects() {
+//   const [subjects, setSubjects] = useState([]);
+//   useEffect(() => { api.get("/public/subjects").then(r => setSubjects(r.data)); }, []);
+
+//   return (
+//     <section className="section page">
+//       <span className="eyebrow">STUDY MATERIAL</span>
+//       <h1>All Subjects</h1>
+//       <p className="muted">Pick a subject and start with any chapter.</p>
+//       <div className="subject-grid">
+//         {subjects.map(s => (
+//           <Link className="subject-card" key={s._id} to={`/subject/${s.slug}`}>
+//             <span className="subject-icon">{s.icon}</span>
+//             <div><h3>{s.name}</h3><p>{s.description || "View chapters →"}</p></div>
+//             <span className="arrow">→</span>
+//           </Link>
+//         ))}
+//       </div>
+//     </section>
+//   );
+// }
+
 function Subjects() {
-  const [subjects, setSubjects] = useState([]);
-  useEffect(() => { api.get("/public/subjects").then(r => setSubjects(r.data)); }, []);
+  const [subjects, setSubjects] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("subjects_cache")) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [loading, setLoading] = useState(subjects.length === 0);
+
+  useEffect(() => {
+    api.get("/public/subjects")
+      .then(r => {
+        setSubjects(r.data);
+        sessionStorage.setItem("subjects_cache", JSON.stringify(r.data));
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <Loader />;
 
   return (
     <section className="section page">
       <span className="eyebrow">STUDY MATERIAL</span>
       <h1>All Subjects</h1>
       <p className="muted">Pick a subject and start with any chapter.</p>
+
       <div className="subject-grid">
         {subjects.map(s => (
           <Link className="subject-card" key={s._id} to={`/subject/${s.slug}`}>
             <span className="subject-icon">{s.icon}</span>
-            <div><h3>{s.name}</h3><p>{s.description || "View chapters →"}</p></div>
+            <div>
+              <h3>{s.name}</h3>
+              <p>{s.description || "View chapters →"}</p>
+            </div>
             <span className="arrow">→</span>
           </Link>
         ))}
       </div>
+
+      {!subjects.length && (
+        <Empty text="Subjects will appear here once the admin adds them." />
+      )}
     </section>
   );
 }
