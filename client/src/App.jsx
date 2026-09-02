@@ -116,27 +116,6 @@ function Home() {
   );
 }
 
-// function Subjects() {
-//   const [subjects, setSubjects] = useState([]);
-//   useEffect(() => { api.get("/public/subjects").then(r => setSubjects(r.data)); }, []);
-
-//   return (
-//     <section className="section page">
-//       <span className="eyebrow">STUDY MATERIAL</span>
-//       <h1>All Subjects</h1>
-//       <p className="muted">Pick a subject and start with any chapter.</p>
-//       <div className="subject-grid">
-//         {subjects.map(s => (
-//           <Link className="subject-card" key={s._id} to={`/subject/${s.slug}`}>
-//             <span className="subject-icon">{s.icon}</span>
-//             <div><h3>{s.name}</h3><p>{s.description || "View chapters →"}</p></div>
-//             <span className="arrow">→</span>
-//           </Link>
-//         ))}
-//       </div>
-//     </section>
-//   );
-// }
 
 function Subjects() {
   const [subjects, setSubjects] = useState(() => {
